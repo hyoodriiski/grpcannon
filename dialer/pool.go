@@ -1,58 +1,65 @@
 package dialer
 
 import (
-	"context"
-	"fmt"
-	"sync"
+	"errors"
+	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 )
 
-// Pool manages a fixed set of gRPC client connections.
+// Pool holds a fixed set of gRPC connections and distributes them round-robin.
 type Pool struct {
-	mu    sync.Mutex
 	conns []*grpc.ClientConn
-	next  int
+	next  uint64
 }
 
-// NewPool creates a pool of `size` connections to the same target.
-func NewPool(ctx context.Context, size int, opts Options) (*Pool, error) {
-	if size <= 0 {
-		return nil, fmt.Errorf("pool: size must be > 0")
+// NewPool creates a pool of size connections to addr.
+func NewPool(addr string, size int, timeout time.Duration) (*Pool, error) {
+	if addr == "" {
+		return nil, errors.New("address must not be empty")
 	}
+	if size <= 0 {
+		return nil, errors.New("pool size must be greater than zero")
+	}
+
 	conns := make([]*grpc.ClientConn, 0, size)
 	for i := 0; i < size; i++ {
-		conn, err := Connect(ctx, opts)
+		conn, err := Connect(addr, timeout)
 		if err != nil {
-			// Close already-opened connections before returning.
+			// close already-opened connections before returning
 			for _, c := range conns {
-				c.Close() //nolint:errcheck
+				_ = c.Close()
 			}
-			return nil, fmt.Errorf("pool: connection %d failed: %w", i, err)
+			return nil, err
 		}
 		conns = append(conns, conn)
 	}
+
 	return &Pool{conns: conns}, nil
 }
 
 // Get returns the next connection in round-robin order.
 func (p *Pool) Get() *grpc.ClientConn {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	conn := p.conns[p.next%len(p.conns)]
-	p.next++
-	return conn
+	if len(p.conns) == 0 {
+		return nil
+	}
+	idx := atomic.AddUint64(&p.next, 1) - 1
+	return p.conns[idx%uint64(len(p.conns))]
+}
+
+// Size returns the number of connections in the pool.
+func (p *Pool) Size() int {
+	return len(p.conns)
 }
 
 // Close closes all connections in the pool.
 func (p *Pool) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	var firstErr error
+	var last error
 	for _, c := range p.conns {
-		if err := c.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if err := c.Close(); err != nil {
+			last = err
 		}
 	}
-	return firstErr
+	return last
 }
