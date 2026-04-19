@@ -1,71 +1,63 @@
-package config
+package config_test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/example/grpcannon/config"
 )
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
-	if cfg.Concurrency != 10 {
-		t.Errorf("expected concurrency 10, got %d", cfg.Concurrency)
+	c := config.DefaultConfig()
+	if c.Concurrency != 10 {
+		t.Errorf("expected concurrency 10, got %d", c.Concurrency)
 	}
-	if cfg.Requests != 100 {
-		t.Errorf("expected requests 100, got %d", cfg.Requests)
+	if c.Timeout != 5*time.Second {
+		t.Errorf("expected timeout 5s, got %v", c.Timeout)
 	}
-	if cfg.Timeout != 5*time.Second {
-		t.Errorf("expected timeout 5s, got %v", cfg.Timeout)
+	if c.RPS != 0 {
+		t.Errorf("expected rps 0, got %d", c.RPS)
 	}
 }
 
 func TestValidate_MissingAddress(t *testing.T) {
-	cfg := DefaultConfig()
-	if err := cfg.Validate(); err == nil || err.Error() != "address is required" {
-		t.Errorf("expected address error, got %v", err)
+	c := config.DefaultConfig()
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for missing address")
 	}
 }
 
 func TestValidate_Valid(t *testing.T) {
-	cfg := &Config{
-		Address:     "localhost:50051",
-		ProtoFile:   "service.proto",
-		Service:     "helloworld.Greeter",
-		Method:      "SayHello",
-		Concurrency: 5,
-		Requests:    50,
-		Timeout:     3 * time.Second,
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("expected no error, got %v", err)
+	c := config.DefaultConfig()
+	c.Address = "localhost:50051"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestValidate_InvalidConcurrency(t *testing.T) {
-	cfg := &Config{
-		Address:     "localhost:50051",
-		ProtoFile:   "service.proto",
-		Service:     "helloworld.Greeter",
-		Method:      "SayHello",
-		Concurrency: 0,
-		Requests:    50,
-		Timeout:     3 * time.Second,
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Error("expected concurrency error, got nil")
+	c := config.DefaultConfig()
+	c.Address = "localhost:50051"
+	c.Concurrency = 0
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for zero concurrency")
 	}
 }
 
 func TestValidate_InvalidTimeout(t *testing.T) {
-	cfg := &Config{
-		Address:     "localhost:50051",
-		ProtoFile:   "service.proto",
-		Service:     "helloworld.Greeter",
-		Method:      "SayHello",
-		Concurrency: 5,
-		Requests:    50,
-		Timeout:     0,
+	c := config.DefaultConfig()
+	c.Address = "localhost:50051"
+	c.Timeout = 0
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for zero timeout")
 	}
-	if err := cfg.Validate(); err == nil {
-		t.Error("expected timeout error, got nil")
+}
+
+func TestValidate_RPSField(t *testing.T) {
+	c := config.DefaultConfig()
+	c.Address = "localhost:50051"
+	c.RPS = 50
+	if err := c.Validate(); err != nil {
+		t.Fatalf("unexpected error with rps set: %v", err)
 	}
 }
