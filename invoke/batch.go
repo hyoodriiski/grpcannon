@@ -2,38 +2,31 @@ package invoke
 
 import (
 	"context"
-	"sync"
+
+	"google.golang.org/grpc"
 )
 
-// BatchConfig controls how many calls are made in parallel.
-type BatchConfig struct {
-	Concurrency int
-	Total       int
+// Result holds the outcome of a single RPC call.
+type Result struct {
+	Latency time.Duration
+	Err     error
 }
 
-// RunBatch executes Total calls using Concurrency goroutines and returns all Results.
-func RunBatch(ctx context.Context, inv *Invoker, cfg BatchConfig) []Result {
-	if cfg.Concurrency <= 0 {
-		cfg.Concurrency = 1
-	}
-
-	results := make([]Result, cfg.Total)
-	sem := make(chan struct{}, cfg.Concurrency)
-	var wg sync.WaitGroup
-
-	for i := 0; i < cfg.Total; i++ {
-		if ctx.Err() != nil {
-			break
+// RunBatch executes n RPC calls sequentially using the provided connection and
+// method, returning one Result per call. It is intentionally simple so that
+// higher-level workers can parallelise across multiple RunBatch invocations.
+func RunBatch(ctx context.Context, conn *grpc.ClientConn, method string, n int) []Result {
+	invoker := New(conn)
+	results := make([]Result, 0, n)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ctx.Done():
+			results = append(results, Result{Err: ctx.Err()})
+			continue
+		default:
 		}
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(idx int) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			results[idx] = inv.Call(ctx)
-		}(i)
+		latency, err := invoker.Call(ctx, method)
+		results = append(results, Result{Latency: latency, Err: err})
 	}
-
-	wg.Wait()
 	return results
 }
