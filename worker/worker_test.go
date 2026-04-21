@@ -90,3 +90,25 @@ func TestDispatch_SendsAllTasks(t *testing.T) {
 		t.Errorf("expected %d tasks, got %d", n, count)
 	}
 }
+
+// TestDispatch_IndexPassedToFactory verifies that the factory function receives
+// the correct sequential index for each task, starting from 0.
+func TestDispatch_IndexPassedToFactory(t *testing.T) {
+	ctx := context.Background()
+	const n = 5
+	var indices []int
+	ch := worker.Dispatch(ctx, n, func(i int) worker.Task {
+		indices = append(indices, i)
+		return worker.Task{Method: "m"}
+	})
+	for range ch {
+	}
+	if len(indices) != n {
+		t.Fatalf("expected %d index calls, got %d", n, len(indices))
+	}
+	for want, got := range indices {
+		if got != want {
+			t.Errorf("index[%d] = %d, want %d", want, got, want)
+		}
+	}
+}
