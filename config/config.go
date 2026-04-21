@@ -33,8 +33,14 @@ func (c Config) Validate() error {
 	if c.Concurrency <= 0 {
 		return errors.New("concurrency must be greater than 0")
 	}
+	if c.Requests <= 0 {
+		return errors.New("requests must be greater than 0")
+	}
 	if c.Timeout <= 0 {
 		return errors.New("timeout must be greater than 0")
+	}
+	if c.RPS < 0 {
+		return errors.New("rps must be non-negative")
 	}
 	return nil
 }
