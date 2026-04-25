@@ -61,3 +61,17 @@ func (j *Jitter) Apply(base, prev time.Duration) time.Duration {
 		return base
 	}
 }
+
+// Capped returns a jittered duration derived from base, clamped to a maximum
+// value of cap. This is useful when combining jitter with exponential backoff
+// to prevent delays from growing without bound.
+func (j *Jitter) Capped(base, prev, cap time.Duration) time.Duration {
+	if cap <= 0 {
+		return j.Apply(base, prev)
+	}
+	d := j.Apply(base, prev)
+	if d > cap {
+		return cap
+	}
+	return d
+}
