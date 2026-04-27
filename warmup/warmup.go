@@ -3,6 +3,7 @@ package warmup
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -37,17 +38,16 @@ func Run(ctx context.Context, cfg Config, fn Invoker) {
 		}
 	}()
 
-	done := make(chan struct{})
+	var wg sync.WaitGroup
 	for i := 0; i < cfg.Concurrency; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for range work {
 				_ = fn(deadline)
 			}
-			done <- struct{}{}
 		}()
 	}
 
-	for i := 0; i < cfg.Concurrency; i++ {
-		<-done
-	}
+	wg.Wait()
 }
