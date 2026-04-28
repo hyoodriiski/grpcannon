@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -47,6 +48,18 @@ func TestList_ReturnsAll(t *testing.T) {
 	names := r.List()
 	if len(names) != 2 {
 		t.Errorf("expected 2 names, got %d", len(names))
+	}
+}
+
+func TestRegister_Duplicate(t *testing.T) {
+	r := NewRegistry()
+	err := r.Register(MethodInfo{FullMethod: "/svc/Method"})
+	if err != nil {
+		t.Fatalf("unexpected error on first register: %v", err)
+	}
+	err = r.Register(MethodInfo{FullMethod: "/svc/Method"})
+	if err == nil {
+		t.Fatal("expected error when registering duplicate FullMethod")
 	}
 }
 
