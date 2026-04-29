@@ -88,3 +88,27 @@ func TestRun_ContextCancelled_ReturnsErr(t *testing.T) {
 		t.Fatal("expected an error for cancelled context")
 	}
 }
+
+func TestRun_HedgeFires_SecondSucceeds_FirstStillSlow(t *testing.T) {
+	// Verify that Run returns as soon as the hedge attempt succeeds,
+	// without waiting for the still-running first attempt to finish.
+	h := hedge.New(15 * time.Millisecond)
+	calls := int32(0)
+	start := time.Now()
+	err := h.Run(context.Background(), func(_ context.Context) error {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 1 {
+			time.Sleep(200 * time.Millisecond) // first attempt is very slow
+		}
+		return nil
+	})
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The hedge fires at ~15 ms and succeeds immediately, so total time
+	// should be well under the 200 ms first-attempt sleep.
+	if elapsed >= 150*time.Millisecond {
+		t.Fatalf("Run took too long (%v); hedge should have short-circuited", elapsed)
+	}
+}
